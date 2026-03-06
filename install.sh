@@ -300,27 +300,9 @@ install_docker() {
     fi
 }
 
-download_docker_compose() {
-    echo "Downloading and installing Docker Compose."
-    local COMPOSE_VERSION="2.27.0"
-    curl -SL "https://github.com/docker/compose/releases/download/v${COMPOSE_VERSION}/docker-compose-$(uname -s | tr '[:upper:]' '[:lower:]')-$(uname -m)" -o /usr/local/bin/docker-compose
-    chmod +x /usr/local/bin/docker-compose
-}
-
 install_docker_compose() {
-    if ! (which docker-compose > /dev/null 2>&1); then
-        if (docker compose version > /dev/null 2>&1); then
-            echo "Docker Compose plugin found. Creating docker-compose shim."
-            printf '#!/bin/bash\nexec docker compose "$@"\n' > /usr/local/bin/docker-compose
-            chmod +x /usr/local/bin/docker-compose
-        else
-            download_docker_compose
-        fi
-    fi
-
-    if ! (which docker-compose > /dev/null 2>&1); then
-        echo "Docker Compose not installed. Please check previous logs. Aborting."
-
+    if ! (docker compose version > /dev/null 2>&1); then
+        echo "Docker Compose plugin not found. Please install docker-compose-plugin. Aborting."
         exit 1
     fi
 
@@ -329,7 +311,7 @@ install_docker_compose() {
         local DOCKER_COMPOSE_MAJOR
         local DOCKER_COMPOSE_MINOR
 
-        DOCKER_COMPOSE_VERSION="$(docker-compose version 2>/dev/null | sed 's/.*version v*\([0-9]*\.[0-9]*\).*/\1/')"
+        DOCKER_COMPOSE_VERSION="$(docker compose version 2>/dev/null | sed 's/.*version v*\([0-9]*\.[0-9]*\).*/\1/')"
         if [[ "${DOCKER_COMPOSE_VERSION}" != "" ]]; then
             DOCKER_COMPOSE_MAJOR="${DOCKER_COMPOSE_VERSION%.*}"
             DOCKER_COMPOSE_MINOR="${DOCKER_COMPOSE_VERSION#*.}"
@@ -340,22 +322,7 @@ install_docker_compose() {
 
         if [ "${DOCKER_COMPOSE_MAJOR}" -lt 2 ] && [ "${DOCKER_COMPOSE_MINOR}" -lt 9 ] || [ "${DOCKER_COMPOSE_MAJOR}" -lt 1 ]; then
             echo "Docker Compose version ${DOCKER_COMPOSE_VERSION} is not supported. Please upgrade to version 1.9 or newer."
-            local DO_UPDATE_DOCKER_COMPOSE
-
-            while true; do
-                read -r -p "Would you like to upgrade Docker Compose automatically? [Y/n]: " DO_UPDATE_DOCKER_COMPOSE
-
-                case "${DO_UPDATE_DOCKER_COMPOSE}" in
-                    [yY][eE][sS]|[yY])
-                        download_docker_compose
-                        break;;
-                    [nN][oO]|[nN])
-                        exit 1
-                        break;;
-                    *)
-                        ;;
-                esac
-            done
+            exit 1
         fi
     fi
 }
@@ -559,7 +526,7 @@ configure_network_subnet() {
 
 download_docker_images() {
     echo "Downloading docker images."
-    if ! (docker-compose -f "${UCRM_PATH}/docker-compose.yml" pull); then
+    if ! (docker compose -f "${UCRM_PATH}/docker-compose.yml" pull); then
         if [[ "${FORCE_INSTALL}" = "0" ]]; then
             echo "Image for version \"${INSTALL_VERSION}\" not found."
 
@@ -602,9 +569,9 @@ print_wizard_login() {
 
 start_docker_images() {
     echo "Starting docker images."
-    docker-compose -f "${UCRM_PATH}/docker-compose.yml" -f "${UCRM_PATH}/docker-compose.migrate.yml" run migrate_app && \
-    docker-compose -f "${UCRM_PATH}/docker-compose.yml" up -d && \
-    docker-compose -f "${UCRM_PATH}/docker-compose.yml" ps
+    docker compose -f "${UCRM_PATH}/docker-compose.yml" -f "${UCRM_PATH}/docker-compose.migrate.yml" run migrate_app && \
+    docker compose -f "${UCRM_PATH}/docker-compose.yml" up -d && \
+    docker compose -f "${UCRM_PATH}/docker-compose.yml" ps
 }
 
 confirm_ucrm_running() {
@@ -639,7 +606,7 @@ confirm_ucrm_running() {
 
 detect_installation_finished() {
 	# print web container log and wait for its initialization
-    containerName=$(docker-compose -f "${UCRM_PATH}/docker-compose.yml" ps | grep -m1 "make server" | awk '{print $1}')
+    containerName=$(docker compose -f "${UCRM_PATH}/docker-compose.yml" ps | grep -m1 "make server" | awk '{print $1}')
     docker exec -t "${containerName}" bash -c 'if [[ ! -f /tmp/UCRM_init.log ]]; then \
     		echo "UCRM is booting now, will be available soon"; \
     	else \
