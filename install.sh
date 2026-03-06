@@ -302,13 +302,20 @@ install_docker() {
 
 download_docker_compose() {
     echo "Downloading and installing Docker Compose."
-    curl -L "https://github.com/docker/compose/releases/download/1.16.1/docker-compose-$(uname -s)-$(uname -m)" > /usr/local/bin/docker-compose
+    local COMPOSE_VERSION="2.27.0"
+    curl -SL "https://github.com/docker/compose/releases/download/v${COMPOSE_VERSION}/docker-compose-$(uname -s | tr '[:upper:]' '[:lower:]')-$(uname -m)" -o /usr/local/bin/docker-compose
     chmod +x /usr/local/bin/docker-compose
 }
 
 install_docker_compose() {
     if ! (which docker-compose > /dev/null 2>&1); then
-        download_docker_compose
+        if (docker compose version > /dev/null 2>&1); then
+            echo "Docker Compose plugin found. Creating docker-compose shim."
+            printf '#!/bin/bash\nexec docker compose "$@"\n' > /usr/local/bin/docker-compose
+            chmod +x /usr/local/bin/docker-compose
+        else
+            download_docker_compose
+        fi
     fi
 
     if ! (which docker-compose > /dev/null 2>&1); then
@@ -322,7 +329,7 @@ install_docker_compose() {
         local DOCKER_COMPOSE_MAJOR
         local DOCKER_COMPOSE_MINOR
 
-        DOCKER_COMPOSE_VERSION="$(docker-compose -v | sed 's/.*version \([0-9]*\.[0-9]*\).*/\1/')"
+        DOCKER_COMPOSE_VERSION="$(docker-compose version 2>/dev/null | sed 's/.*version v*\([0-9]*\.[0-9]*\).*/\1/')"
         if [[ "${DOCKER_COMPOSE_VERSION}" != "" ]]; then
             DOCKER_COMPOSE_MAJOR="${DOCKER_COMPOSE_VERSION%.*}"
             DOCKER_COMPOSE_MINOR="${DOCKER_COMPOSE_VERSION#*.}"
@@ -554,7 +561,7 @@ download_docker_images() {
     echo "Downloading docker images."
     if ! (docker-compose -f "${UCRM_PATH}/docker-compose.yml" pull); then
         if [[ "${FORCE_INSTALL}" = "0" ]]; then
-            echo "Image for version \"${version}\" not found."
+            echo "Image for version \"${INSTALL_VERSION}\" not found."
 
             exit 1
         fi
